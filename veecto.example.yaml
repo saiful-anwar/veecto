@@ -1,0 +1,29 @@
+pipeline:
+  output: "output.jsonl"
+  concurrency: 4
+  max_file_size: 524288000
+
+chunking:
+  strategy: "recursive"
+  size: 512
+  overlap: 50
+
+embedding:
+  provider: "openai"
+  batch_size: 32
+  retries: 3
+
+  openai:
+    model: "text-embedding-3-small"
+    api_key: "${OPENAI_API_KEY}"
+
+  ollama:
+    endpoint: "http://localhost:11434"
+    model: "nomic-embed-text"
+
+  gemini:
+    model: "text-embedding-004"
+    api_key: "${GEMINI_API_KEY}"
+
+  http:
+    endpoint: "http://localhost:8080/embed"

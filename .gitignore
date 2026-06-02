@@ -1,0 +1,34 @@
+
+# User config (copy from veecto.example.yaml)
+veecto.yaml
+
+# Default output directory
+output/*
+
+# Keep the directory itself
+!.gitkeep
+
+# Build artifacts
+veecto
+veecto.exe
+cmd/veecto/veecto
+cmd/veecto/veecto.exe
+
+# Test binaries
+*.test
+*.out
+
+# Coverage
+coverage.out
+coverage.html
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
