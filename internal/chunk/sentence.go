@@ -10,8 +10,9 @@ import (
 
 // Sentence splits text into chunks that preserve sentence boundaries.
 type Sentence struct {
-	Size    int
-	Overlap int
+	Size           int
+	Overlap        int
+	AsciiNormalize bool
 }
 
 // Chunk implements core.Chunker.
@@ -65,7 +66,7 @@ func (c *Sentence) buildChunks(sentences []string) []core.Chunk {
 		if buf.Len() > 0 && len([]rune(buf.String()+s)) > c.Size {
 			text := strings.TrimSpace(buf.String())
 			if text != "" {
-				clean := cleanText(text)
+				clean := cleanText(text, c.AsciiNormalize)
 				end := charPos
 				chunks = append(chunks, core.Chunk{
 					Index:      len(chunks),
@@ -85,7 +86,7 @@ func (c *Sentence) buildChunks(sentences []string) []core.Chunk {
 
 	remainder := strings.TrimSpace(buf.String())
 	if remainder != "" {
-		clean := cleanText(remainder)
+		clean := cleanText(remainder, c.AsciiNormalize)
 		chunks = append(chunks, core.Chunk{
 			Index:      len(chunks),
 			Text:       remainder,

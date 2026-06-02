@@ -168,9 +168,27 @@ func TestCleanText(t *testing.T) {
 		{"", ""},
 	}
 	for _, tt := range tests {
-		got := cleanText(tt.input)
+		got := cleanText(tt.input, false)
 		if got != tt.expected {
 			t.Errorf("cleanText(%q) = %q, want %q", tt.input, got, tt.expected)
+		}
+	}
+}
+
+func TestCleanTextASCII(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"café", "cafe"},
+		{"façade", "facade"},
+		{"你好世界", ""},
+		{"hello world", "hello world"},
+	}
+	for _, tt := range tests {
+		got := cleanText(tt.input, true)
+		if got != tt.expected {
+			t.Errorf("cleanText(%q, true) = %q, want %q", tt.input, got, tt.expected)
 		}
 	}
 }

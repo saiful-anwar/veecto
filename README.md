@@ -72,7 +72,7 @@ veecto ingest *.md ./docs/ -o corpus.jsonl
 cat article.txt | veecto ingest - -o output.jsonl
 
 # Use sentence-based chunking with Gemini
-veecto ingest doc.pdf --chunk-strategy sentence -e gemini --model text-embedding-004
+veecto ingest doc.pdf --chunk-strategy sentence -e gemini --model gmeini-embedding-001
 
 # Validate setup
 veecto validate
@@ -112,7 +112,7 @@ chunking:
   overlap: 50
 
 embedding:
-  provider: "openai"        # openai|ollama|gemini|http
+  provider: "gemini"        # openai|ollama|gemini|http
   batch_size: 32
   retries: 3                # retry count with exponential backoff
 
@@ -125,7 +125,7 @@ embedding:
     model: "nomic-embed-text"
 
   gemini:
-    model: "text-embedding-004"
+    model: "gemini-embedding-001"
     api_key: "${GEMINI_API_KEY}"
 
   http:
@@ -216,12 +216,30 @@ func (e *MyEmbedder) Dimension() int   { return 768 }
 
 ## Chunking Strategies
 
-| Strategy | Best For | Method |
-|----------|----------|--------|
-| `recursive` (default) | General text, prose | Splits by `\n\n` → `\n` → `. ` → `, ` → ` ` |
-| `fixed` | Code, log files | Character-aligned with configurable overlap |
-| `sentence` | Articles, documentation | Preserves `.`/`!`/`?` sentence boundaries |
-| `markdown` | Documentation, wikis | Splits on `#`/`##`/`###` headings |
+### `recursive` (default)
+
+Tries increasingly granular separators in priority order until chunks fit within `size`:
+`\n\n` → `\n` → `. ` → `, ` → ` `. At each level, scans right-to-left for the best split point. Falls back to a hard character cut when no separator is found. Applies `overlap` between adjacent chunks.
+
+**Best for:** General prose, articles, mixed-content documents.
+
+### `fixed`
+
+Blindly splits every `size` characters with configurable `overlap`. No awareness of paragraphs, sentences, or word boundaries.
+
+**Best for:** Code files, log data, or any content where structural boundaries don't matter.
+
+### `sentence`
+
+Splits text at sentence-ending punctuation (`.` / `!` / `?` / `\n`), then merges consecutive sentences until they exceed `size`. Every chunk starts and ends at a sentence boundary.
+
+**Best for:** Articles, research papers, documentation — where breaking mid-sentence would lose meaning.
+
+### `markdown`
+
+Splits at Markdown heading lines (`#`, `##`, `###`, etc.), then merges adjacent sections until they exceed `size`. Preserves heading hierarchy — chunks never split mid-section.
+
+**Best for:** Wikis, API docs, README files — where sections are natural semantic units.
 
 ## Text Cleaning
 
@@ -239,7 +257,7 @@ The `text_clean` field applies these rules in order:
 |----------|--------------|------|-------|
 | **openai** | `text-embedding-3-small` | `api_key` (env `OPENAI_API_KEY`) | Yes |
 | **ollama** | `nomic-embed-text` | None (local) | Yes (configurable) |
-| **gemini** | `text-embedding-004` | `api_key` (env `GEMINI_API_KEY`) | Yes |
+| **gemini** | `gemini-embedding-001` | `api_key` (env `GEMINI_API_KEY`) | Yes |
 | **http** | custom | Configurable endpoint | Yes |
 
 ## Tests

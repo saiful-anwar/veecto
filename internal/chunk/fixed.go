@@ -8,8 +8,9 @@ import (
 
 // Fixed splits text into chunks of a fixed character size with optional overlap.
 type Fixed struct {
-	Size    int
-	Overlap int
+	Size           int
+	Overlap        int
+	AsciiNormalize bool
 }
 
 // Chunk implements core.Chunker.
@@ -37,7 +38,7 @@ func (c *Fixed) Chunk(text string) ([]core.Chunk, error) {
 		}
 
 		chunkText := string(runes[pos:end])
-		clean := cleanText(chunkText)
+		clean := cleanText(chunkText, c.AsciiNormalize)
 		if clean != "" {
 			chunks = append(chunks, core.Chunk{
 				Index:      len(chunks),

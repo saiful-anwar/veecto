@@ -29,9 +29,10 @@ type Config struct {
 	} `yaml:"pipeline"`
 
 	Chunking struct {
-		Strategy string `yaml:"strategy"`
-		Size     int    `yaml:"size"`
-		Overlap  int    `yaml:"overlap"`
+		Strategy       string `yaml:"strategy"`
+		Size           int    `yaml:"size"`
+		Overlap        int    `yaml:"overlap"`
+		AsciiNormalize bool   `yaml:"ascii_normalize"`
 	} `yaml:"chunking"`
 
 	Embedding struct {

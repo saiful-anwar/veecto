@@ -4,11 +4,22 @@ import (
 	"math"
 	"strings"
 	"unicode"
+
+	"golang.org/x/text/runes"
+	"golang.org/x/text/transform"
+	"golang.org/x/text/unicode/norm"
 )
 
 // cleanText normalizes whitespace, strips control characters (except \n \t \r),
+// optionally NFKD-decomposes and strips combining marks + non-ASCII,
 // and trims leading/trailing whitespace.
-func cleanText(text string) string {
+func cleanText(text string, asciiNormalize bool) string {
+	if asciiNormalize {
+		t := transform.Chain(norm.NFKD, runes.Remove(runes.In(unicode.Mn)))
+		result, _, _ := transform.String(t, text)
+		text = result
+	}
+
 	var b strings.Builder
 	b.Grow(len(text))
 	prevSpace := false
@@ -20,6 +31,9 @@ func cleanText(text string) string {
 			continue
 		}
 		if unicode.IsControl(r) {
+			continue
+		}
+		if asciiNormalize && r > 127 {
 			continue
 		}
 		if unicode.IsSpace(r) {

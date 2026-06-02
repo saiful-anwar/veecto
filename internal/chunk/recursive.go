@@ -13,8 +13,9 @@ var recSeperators = []string{"\n\n", "\n", ". ", ", ", " "}
 // Recursive splits text by trying increasingly granular separators
 // (\n\n → \n → .  → ,  → space) until chunks fit within Size.
 type Recursive struct {
-	Size    int
-	Overlap int
+	Size           int
+	Overlap        int
+	AsciiNormalize bool
 }
 
 // Chunk implements core.Chunker.
@@ -50,7 +51,7 @@ func (c *Recursive) split(runes []rune, start, targetSize int) []core.Chunk {
 	isSmall := len([]rune(segment)) <= c.Size/2
 
 	if isLast || isSmall {
-		clean := cleanText(segment)
+		clean := cleanText(segment, c.AsciiNormalize)
 		if clean == "" {
 			return nil
 		}
@@ -71,7 +72,7 @@ func (c *Recursive) split(runes []rune, start, targetSize int) []core.Chunk {
 
 	actualEnd := start + splitAt
 	chunkText := string(runes[start:actualEnd])
-	clean := cleanText(chunkText)
+	clean := cleanText(chunkText, c.AsciiNormalize)
 
 	var result []core.Chunk
 	if clean != "" {
