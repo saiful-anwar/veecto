@@ -7,7 +7,8 @@ import (
 	"github.com/saiful-anwar/veecto/internal/core"
 )
 
-// prettyWriter writes Documents as indented JSON.
+// prettyWriter writes Documents as indented JSONL: one pretty-printed JSON
+// object per line (separated by newlines). Not a valid JSON array.
 type prettyWriter struct {
 	file *os.File
 }

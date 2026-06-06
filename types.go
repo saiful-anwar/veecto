@@ -30,7 +30,12 @@ func NewChunker(cfg Config) Chunker { return chunk.New(cfg) }
 func NewEmbedder(cfg Config) (Embedder, error) { return embed.New(cfg) }
 
 // NewWriter creates a JSONL or pretty-JSON Writer backed by a file at path.
+// Deprecated: use NewWriterFormat.
 func NewWriter(path string, pretty bool) (Writer, error) { return output.New(path, pretty) }
+
+// NewWriterFormat creates a Writer using an explicit format name
+// ("jsonl", "pretty", or "json-array").
+func NewWriterFormat(path string, format string) (Writer, error) { return output.NewFormat(path, format) }
 
 // MultiWriter fans out Write/Close to multiple underlying writers.
 func MultiWriter(writers ...Writer) Writer { return output.Multi(writers...) }

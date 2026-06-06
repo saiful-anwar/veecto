@@ -82,16 +82,47 @@ func TestInputsNoMatch(t *testing.T) {
 	}
 }
 
-func TestListDir(t *testing.T) {
+func TestWalkDir(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "test.txt"), []byte("a"), 0644)
 	os.WriteFile(filepath.Join(dir, "test.md"), []byte("b"), 0644)
 
-	files, err := listDir(dir)
+	files, err := walkDir(dir, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(files) != 2 {
 		t.Fatalf("expected 2, got %d", len(files))
+	}
+}
+
+func TestWalkDirNested(t *testing.T) {
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "sub")
+	os.MkdirAll(sub, 0755)
+	os.WriteFile(filepath.Join(dir, "root.txt"), []byte("a"), 0644)
+	os.WriteFile(filepath.Join(sub, "nested.md"), []byte("b"), 0644)
+
+	files, err := walkDir(dir, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 2 {
+		t.Fatalf("expected 2 nested files, got %d: %v", len(files), files)
+	}
+}
+
+func TestInputsFiltered(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a"), 0644)
+	os.WriteFile(filepath.Join(dir, "b.txt"), []byte("b"), 0644)
+	os.WriteFile(filepath.Join(dir, "c.md"), []byte("c"), 0644)
+
+	files, err := InputsFiltered([]string{dir}, "*.txt", "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 2 {
+		t.Fatalf("expected 2 txt files, got %d: %v", len(files), files)
 	}
 }

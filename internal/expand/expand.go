@@ -17,9 +17,16 @@ var SupportedExts = map[string]bool{
 }
 
 // Inputs expands raw CLI arguments into a flat, deduplicated, sorted list of file paths.
-// Supports glob patterns, directories (scanned for SupportedExts), URLs (passed through),
-// and stdin ("-"). Non-glob file paths are validated to exist.
+// Supports glob patterns, directories (recursively scanned for SupportedExts), URLs (passed through),
+// and stdin ("-").
 func Inputs(raw []string) ([]string, error) {
+	return InputsFiltered(raw, "", "", 0)
+}
+
+// InputsFiltered expands raw CLI arguments with include/exclude glob patterns and max depth.
+// A non-empty include pattern restricts to files matching the glob; a non-empty exclude glob
+// filters out matching files. Depth 0 means unlimited.
+func InputsFiltered(raw []string, includeGlob, excludeGlob string, maxDepth int) ([]string, error) {
 	var expanded []string
 	seen := make(map[string]bool)
 
@@ -42,10 +49,12 @@ func Inputs(raw []string) ([]string, error) {
 
 		matches, err := filepath.Glob(r)
 		if err != nil {
-			return nil, fmt.Errorf("glob %s: %w", r, err)
+			// Malformed glob pattern — treat as literal path and let os.Stat validate.
+			matches = []string{r}
 		}
 		if len(matches) == 0 {
-			return nil, fmt.Errorf("no files match: %s", r)
+			// No glob match — try as literal path.
+			matches = []string{r}
 		}
 
 		for _, m := range matches {
@@ -56,21 +65,25 @@ func Inputs(raw []string) ([]string, error) {
 
 			info, err := os.Stat(m)
 			if err != nil {
-				return nil, fmt.Errorf("stat %s: %w", m, err)
+				return nil, fmt.Errorf("access %s: %w", m, err)
 			}
 			if info.IsDir() {
-				dirFiles, err := listDir(m)
+				dirFiles, err := walkDir(m, maxDepth)
 				if err != nil {
 					return nil, err
 				}
 				for _, df := range dirFiles {
 					if !seen[df] {
-						expanded = append(expanded, df)
 						seen[df] = true
+						if matchesFilter(df, includeGlob, excludeGlob) {
+							expanded = append(expanded, df)
+						}
 					}
 				}
 			} else {
-				expanded = append(expanded, m)
+				if matchesFilter(m, includeGlob, excludeGlob) {
+					expanded = append(expanded, m)
+				}
 			}
 		}
 	}
@@ -79,26 +92,66 @@ func Inputs(raw []string) ([]string, error) {
 	return expanded, nil
 }
 
-// listDir returns all supported files in a directory (non-recursive).
-func listDir(dir string) ([]string, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, fmt.Errorf("read dir %s: %w", dir, err)
+// matchesFilter returns true if path matches includeGlob (if set) and does not
+// match excludeGlob (if set). Empty patterns are treated as "match all".
+func matchesFilter(path, includeGlob, excludeGlob string) bool {
+	if includeGlob != "" {
+		match, _ := filepath.Match(includeGlob, filepath.Base(path))
+		if !match {
+			match, _ = filepath.Match(includeGlob, path)
+		}
+		if !match {
+			return false
+		}
 	}
+	if excludeGlob != "" {
+		match, _ := filepath.Match(excludeGlob, filepath.Base(path))
+		if !match {
+			match, _ = filepath.Match(excludeGlob, path)
+		}
+		if match {
+			return false
+		}
+	}
+	return true
+}
 
+// walkDir recursively lists supported files in dir, respecting maxDepth (0 = unlimited).
+func walkDir(dir string, maxDepth int) ([]string, error) {
 	var files []string
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, fmt.Errorf("abs: %w", err)
+	}
+	baseDepth := strings.Count(absDir, string(filepath.Separator))
+
+	err = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
 		}
-		ext := strings.ToLower(filepath.Ext(e.Name()))
-		if SupportedExts[ext] {
-			files = append(files, filepath.Join(dir, e.Name()))
+		if d.IsDir() {
+			// Skip hidden directories unless it's the root.
+			if strings.HasPrefix(d.Name(), ".") && path != dir {
+				return filepath.SkipDir
+			}
+			// Check depth.
+			if maxDepth > 0 {
+				depth := strings.Count(path, string(filepath.Separator)) - baseDepth
+				if depth > maxDepth {
+					return filepath.SkipDir
+				}
+			}
+			return nil
 		}
+		ext := strings.ToLower(filepath.Ext(d.Name()))
+		if SupportedExts[ext] && !strings.HasPrefix(d.Name(), ".") {
+			files = append(files, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("walk %s: %w", dir, err)
 	}
 
-	if len(files) == 0 {
-		return nil, fmt.Errorf("no supported files in directory: %s", dir)
-	}
 	return files, nil
 }

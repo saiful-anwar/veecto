@@ -12,28 +12,32 @@ import (
 // New creates a core.Embedder from the given config. The embedder is wrapped with
 // retry middleware when cfg.Embedding.Retries > 0.
 func New(cfg core.Config) (core.Embedder, error) {
+	timeout := 60 * time.Second
+	if cfg.Embedding.Timeout > 0 {
+		timeout = time.Duration(cfg.Embedding.Timeout) * time.Second
+	}
+	client := &http.Client{Timeout: timeout}
+
 	var e core.Embedder
 	switch cfg.Embedding.Provider {
 	case "openai":
-		e = newOpenAI(cfg.Embedding.OpenAI.APIKey, cfg.Embedding.OpenAI.Model, cfg.Embedding.BatchSize)
+		e = newOpenAI(cfg.Embedding.OpenAI.APIKey, cfg.Embedding.OpenAI.Model, cfg.Embedding.BatchSize,
+			cfg.Embedding.OpenAI.BaseURL, cfg.Embedding.OpenAI.BearerToken, client)
 	case "ollama":
-		e = newOllama(cfg.Embedding.Ollama.Endpoint, cfg.Embedding.Ollama.Model, cfg.Embedding.BatchSize)
+		e = newOllama(cfg.Embedding.Ollama.Endpoint, cfg.Embedding.Ollama.Model, cfg.Embedding.BatchSize, client)
 	case "gemini":
-		e = newGemini(cfg.Embedding.Gemini.APIKey, cfg.Embedding.Gemini.Model, cfg.Embedding.BatchSize)
+		e = newGemini(cfg.Embedding.Gemini.APIKey, cfg.Embedding.Gemini.Model, cfg.Embedding.BatchSize,
+			cfg.Embedding.Gemini.BaseURL, cfg.Embedding.Gemini.BearerToken, client)
 	case "http":
-		e = newHTTP(cfg.Embedding.HTTP.Endpoint, cfg.Embedding.BatchSize)
+		e = newHTTP(cfg.Embedding.HTTP.Endpoint, cfg.Embedding.BatchSize,
+			cfg.Embedding.HTTP.BearerToken, cfg.Embedding.HTTP.Headers, client)
 	default:
 		return nil, fmt.Errorf("unknown embedder provider: %s", cfg.Embedding.Provider)
 	}
 	if cfg.Embedding.Retries > 0 {
-		e = Retry(e, cfg.Embedding.Retries, 1)
+		e = Retry(e, cfg.Embedding.Retries, 1*time.Second)
 	}
 	return e, nil
-}
-
-// httpClient is the shared HTTP client used by all embedder providers.
-var httpClient = &http.Client{
-	Timeout: 30 * time.Second,
 }
 
 // embedBatch splits texts into batches and calls fn for each batch, respecting ctx cancellation.

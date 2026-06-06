@@ -9,6 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Default configuration values used when fields are zero-valued in YAML config.
 const (
 	DefaultChunkSize       = 512
 	DefaultChunkOverlap    = 50
@@ -18,6 +19,7 @@ const (
 	DefaultConcurrency     = 4
 	DefaultMaxFileSize     = 500 * 1024 * 1024
 	DefaultMaxDownloadSize = 500 * 1024 * 1024
+	DefaultMaxTextSize     = 10 * 1024 * 1024
 )
 
 // Config defines the full set of configurable parameters for the ingestion pipeline.
@@ -26,6 +28,7 @@ type Config struct {
 		Output      string `yaml:"output"`
 		Concurrency int    `yaml:"concurrency"`
 		MaxFileSize int64  `yaml:"max_file_size"`
+		MaxTextSize int64  `yaml:"max_text_size"`
 	} `yaml:"pipeline"`
 
 	Chunking struct {
@@ -39,20 +42,27 @@ type Config struct {
 		Provider  string `yaml:"provider"`
 		BatchSize int    `yaml:"batch_size"`
 		Retries   int    `yaml:"retries"`
+		Timeout   int    `yaml:"timeout"`
 		OpenAI    struct {
-			Model  string `yaml:"model"`
-			APIKey string `yaml:"api_key"`
+			Model       string `yaml:"model"`
+			APIKey      string `yaml:"api_key"`
+			BaseURL     string `yaml:"base_url"`
+			BearerToken string `yaml:"bearer_token"`
 		} `yaml:"openai"`
 		Ollama struct {
 			Endpoint string `yaml:"endpoint"`
 			Model    string `yaml:"model"`
 		} `yaml:"ollama"`
 		Gemini struct {
-			Model  string `yaml:"model"`
-			APIKey string `yaml:"api_key"`
+			Model       string `yaml:"model"`
+			APIKey      string `yaml:"api_key"`
+			BaseURL     string `yaml:"base_url"`
+			BearerToken string `yaml:"bearer_token"`
 		} `yaml:"gemini"`
 		HTTP struct {
-			Endpoint string `yaml:"endpoint"`
+			Endpoint    string            `yaml:"endpoint"`
+			BearerToken string            `yaml:"bearer_token"`
+			Headers     map[string]string `yaml:"headers"`
 		} `yaml:"http"`
 	} `yaml:"embedding"`
 }
@@ -111,6 +121,9 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.Pipeline.MaxFileSize <= 0 {
 		cfg.Pipeline.MaxFileSize = DefaultMaxFileSize
+	}
+	if cfg.Pipeline.MaxTextSize <= 0 {
+		cfg.Pipeline.MaxTextSize = DefaultMaxTextSize
 	}
 	if cfg.Embedding.OpenAI.Model == "" {
 		cfg.Embedding.OpenAI.Model = "text-embedding-3-small"
@@ -171,6 +184,9 @@ func (c Config) Validate() error {
 	}
 	if c.Pipeline.MaxFileSize <= 0 {
 		return fmt.Errorf("max_file_size must be > 0")
+	}
+	if c.Pipeline.MaxTextSize < 0 {
+		return fmt.Errorf("max_text_size must be >= 0")
 	}
 	if c.Embedding.Provider == "openai" && c.Embedding.OpenAI.APIKey == "" {
 		return fmt.Errorf("openai api_key required when provider=openai")

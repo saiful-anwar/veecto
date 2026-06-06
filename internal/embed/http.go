@@ -7,24 +7,34 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 
 	"github.com/saiful-anwar/veecto/internal/core"
 )
 
 // httpEmbed implements core.Embedder for a custom HTTP embeddings endpoint.
 type httpEmbed struct {
-	endpoint  string
-	batchSize int
+	endpoint    string
+	batchSize   int
+	bearerToken string
+	headers     map[string]string
+	client      *http.Client
+
+	mu        sync.Mutex
+	dimension int
 }
 
-func newHTTP(endpoint string, batchSize int) core.Embedder {
+func newHTTP(endpoint string, batchSize int, bearerToken string, headers map[string]string, client *http.Client) core.Embedder {
 	if endpoint == "" {
 		endpoint = "http://localhost:8080/embed"
 	}
 	if batchSize <= 0 {
 		batchSize = 32
 	}
-	return &httpEmbed{endpoint: endpoint, batchSize: batchSize}
+	if headers == nil {
+		headers = make(map[string]string)
+	}
+	return &httpEmbed{endpoint: endpoint, batchSize: batchSize, bearerToken: bearerToken, headers: headers, client: client}
 }
 
 type httpRequest struct {
@@ -39,7 +49,16 @@ type httpResponse struct {
 }
 
 func (e *httpEmbed) Embed(ctx context.Context, texts []string) ([][]float32, error) {
-	return embedBatch(ctx, texts, e.batchSize, e.call)
+	results, err := embedBatch(ctx, texts, e.batchSize, e.call)
+	if err != nil {
+		return nil, err
+	}
+	e.mu.Lock()
+	if e.dimension == 0 && len(results) > 0 {
+		e.dimension = len(results[0])
+	}
+	e.mu.Unlock()
+	return results, nil
 }
 
 func (e *httpEmbed) call(ctx context.Context, texts []string) ([][]float32, error) {
@@ -54,8 +73,14 @@ func (e *httpEmbed) call(ctx context.Context, texts []string) ([][]float32, erro
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if e.bearerToken != "" {
+		req.Header.Set("Authorization", "Bearer "+e.bearerToken)
+	}
+	for k, v := range e.headers {
+		req.Header.Set(k, v)
+	}
 
-	resp, err := httpClient.Do(req)
+	resp, err := e.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("http embedder: %w", err)
 	}
@@ -66,7 +91,7 @@ func (e *httpEmbed) call(ctx context.Context, texts []string) ([][]float32, erro
 		return nil, fmt.Errorf("http embedder read: %w", err)
 	}
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("http embedder: HTTP %d: %s", resp.StatusCode, string(raw))
+		return nil, &httpError{code: resp.StatusCode, body: string(raw)}
 	}
 
 	var res httpResponse
@@ -94,4 +119,8 @@ func (e *httpEmbed) call(ctx context.Context, texts []string) ([][]float32, erro
 
 func (e *httpEmbed) Provider() string { return "http" }
 func (e *httpEmbed) Model() string    { return "custom" }
-func (e *httpEmbed) Dimension() int   { return 0 }
+func (e *httpEmbed) Dimension() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.dimension
+}

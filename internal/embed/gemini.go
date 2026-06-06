@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 
 	"github.com/saiful-anwar/veecto/internal/core"
 )
@@ -16,16 +17,28 @@ type gemini struct {
 	apiKey    string
 	model     string
 	batchSize int
+	baseURL   string
+	client    *http.Client
+
+	mu        sync.Mutex
+	dimension int
 }
 
-func newGemini(apiKey, model string, batchSize int) core.Embedder {
+func newGemini(apiKey, model string, batchSize int, baseURL, bearerToken string, client *http.Client) core.Embedder {
 	if model == "" {
 		model = "text-embedding-004"
 	}
 	if batchSize <= 0 {
 		batchSize = 32
 	}
-	return &gemini{apiKey: apiKey, model: model, batchSize: batchSize}
+	if baseURL == "" {
+		baseURL = "https://generativelanguage.googleapis.com/v1beta"
+	}
+	token := apiKey
+	if bearerToken != "" {
+		token = bearerToken
+	}
+	return &gemini{apiKey: token, model: model, batchSize: batchSize, baseURL: baseURL, client: client}
 }
 
 type geminiContent struct {
@@ -59,10 +72,7 @@ func (e *gemini) Embed(ctx context.Context, texts []string) ([][]float32, error)
 }
 
 func (e *gemini) call(ctx context.Context, text string) ([]float32, error) {
-	url := fmt.Sprintf(
-		"https://generativelanguage.googleapis.com/v1beta/models/%s:embedContent?key=%s",
-		e.model, e.apiKey,
-	)
+	url := fmt.Sprintf("%s/models/%s:embedContent", e.baseURL, e.model)
 
 	body := geminiRequest{
 		Content: geminiContent{
@@ -81,8 +91,9 @@ func (e *gemini) call(ctx context.Context, text string) ([]float32, error) {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-goog-api-key", e.apiKey)
 
-	resp, err := httpClient.Do(req)
+	resp, err := e.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("gemini: %w", err)
 	}
@@ -93,7 +104,7 @@ func (e *gemini) call(ctx context.Context, text string) ([]float32, error) {
 		return nil, fmt.Errorf("gemini read: %w", err)
 	}
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("gemini: HTTP %d: %s", resp.StatusCode, string(raw))
+		return nil, &httpError{code: resp.StatusCode, body: string(raw)}
 	}
 
 	var res geminiResponse
@@ -101,9 +112,21 @@ func (e *gemini) call(ctx context.Context, text string) ([]float32, error) {
 		return nil, fmt.Errorf("gemini decode: %w", err)
 	}
 
-	return float64To32(res.Embedding.Values), nil
+	vec := float64To32(res.Embedding.Values)
+
+	e.mu.Lock()
+	if e.dimension == 0 {
+		e.dimension = len(vec)
+	}
+	e.mu.Unlock()
+
+	return vec, nil
 }
 
 func (e *gemini) Provider() string { return "gemini" }
 func (e *gemini) Model() string    { return e.model }
-func (e *gemini) Dimension() int   { return 768 }
+func (e *gemini) Dimension() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.dimension
+}

@@ -1,6 +1,8 @@
 package veecto
 
 import (
+	"context"
+
 	"github.com/saiful-anwar/veecto/internal/expand"
 	"github.com/saiful-anwar/veecto/internal/ingest"
 )
@@ -9,7 +11,7 @@ import (
 type FileResult = ingest.Result
 
 // ReadFile reads a file at the given path. Supports .txt, .md (direct read),
-// .pdf (via pdftohtml + pandoc), and other formats via pandoc.
+// .pdf (via pdf2md-tui), .docx (via word2md).
 func ReadFile(path string) (FileResult, error) {
 	return ingest.ReadFile(path)
 }
@@ -21,12 +23,14 @@ func ReadStdin() (FileResult, error) {
 
 // ResolveInput converts a raw input string into a local file path.
 // URLs are downloaded to a temp file (which is cleaned up via the returned func).
-// Stdin ("-") is returned as-is. Directories return an error.
-func ResolveInput(raw string) (localPath string, cleanup func(), err error) {
-	return ingest.ResolveInput(raw)
+// Context is used for cancellation of URL downloads.
+func ResolveInput(ctx context.Context, raw string) (localPath string, cleanup func(), err error) {
+	return ingest.ResolveInput(ctx, raw)
 }
 
-// CheckDeps verifies that required external tools (pandoc, pdftohtml) are installed.
+// CheckDeps verifies that system dependencies are available.
+// Since veecto uses pure Go libraries for document extraction,
+// no external binaries are required.
 func CheckDeps() error {
 	return ingest.CheckDeps()
 }
@@ -35,4 +39,9 @@ func CheckDeps() error {
 // Results are deduplicated and sorted.
 func ExpandInputs(raw []string) ([]string, error) {
 	return expand.Inputs(raw)
+}
+
+// ExpandInputsFiltered expands inputs with include/exclude glob patterns and max depth.
+func ExpandInputsFiltered(raw []string, include, exclude string, maxDepth int) ([]string, error) {
+	return expand.InputsFiltered(raw, include, exclude, maxDepth)
 }

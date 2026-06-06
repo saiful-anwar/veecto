@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 
 	"github.com/saiful-anwar/veecto/internal/core"
 )
@@ -16,9 +17,13 @@ type ollama struct {
 	endpoint  string
 	model     string
 	batchSize int
+	client    *http.Client
+
+	mu        sync.Mutex
+	dimension int
 }
 
-func newOllama(endpoint, model string, batchSize int) core.Embedder {
+func newOllama(endpoint, model string, batchSize int, client *http.Client) core.Embedder {
 	if endpoint == "" {
 		endpoint = "http://localhost:11434"
 	}
@@ -28,7 +33,7 @@ func newOllama(endpoint, model string, batchSize int) core.Embedder {
 	if batchSize <= 0 {
 		batchSize = 32
 	}
-	return &ollama{endpoint: endpoint, model: model, batchSize: batchSize}
+	return &ollama{endpoint: endpoint, model: model, batchSize: batchSize, client: client}
 }
 
 type ollamaRequest struct {
@@ -41,7 +46,16 @@ type ollamaResponse struct {
 }
 
 func (e *ollama) Embed(ctx context.Context, texts []string) ([][]float32, error) {
-	return embedBatch(ctx, texts, e.batchSize, e.call)
+	results, err := embedBatch(ctx, texts, e.batchSize, e.call)
+	if err != nil {
+		return nil, err
+	}
+	e.mu.Lock()
+	if e.dimension == 0 && len(results) > 0 {
+		e.dimension = len(results[0])
+	}
+	e.mu.Unlock()
+	return results, nil
 }
 
 func (e *ollama) call(ctx context.Context, texts []string) ([][]float32, error) {
@@ -57,7 +71,7 @@ func (e *ollama) call(ctx context.Context, texts []string) ([][]float32, error) 
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := httpClient.Do(req)
+	resp, err := e.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("ollama: %w", err)
 	}
@@ -85,4 +99,8 @@ func (e *ollama) call(ctx context.Context, texts []string) ([][]float32, error) 
 
 func (e *ollama) Provider() string { return "ollama" }
 func (e *ollama) Model() string    { return e.model }
-func (e *ollama) Dimension() int   { return 768 }
+func (e *ollama) Dimension() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.dimension
+}

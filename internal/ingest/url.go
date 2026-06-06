@@ -20,13 +20,14 @@ var downloadClient = &http.Client{Timeout: 5 * time.Minute}
 // ResolveInput resolves a raw input string to a local file path.
 // URLs are downloaded to a temp file (cleanup func removes it).
 // Stdin ("-") is returned as-is. Directories return an error.
-func ResolveInput(raw string) (localPath string, cleanup func(), err error) {
+// The context is used for cancellation of URL downloads.
+func ResolveInput(ctx context.Context, raw string) (localPath string, cleanup func(), err error) {
 	if raw == "-" {
 		return raw, func() {}, nil
 	}
 
 	if strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://") {
-		path, err := fetchURL(raw)
+		path, err := fetchURL(ctx, raw)
 		if err != nil {
 			return "", nil, err
 		}
@@ -44,10 +45,7 @@ func ResolveInput(raw string) (localPath string, cleanup func(), err error) {
 }
 
 // fetchURL downloads a URL to a temp file and returns its path.
-func fetchURL(rawURL string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-
+func fetchURL(ctx context.Context, rawURL string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("request: %w", err)
@@ -75,10 +73,14 @@ func fetchURL(rawURL string) (string, error) {
 
 	src := io.LimitReader(resp.Body, maxDownloadSize)
 	_, err = io.Copy(tmp, src)
-	tmp.Close()
+	closeErr := tmp.Close()
 	if err != nil {
 		os.Remove(tmp.Name())
 		return "", fmt.Errorf("save download: %w", err)
+	}
+	if closeErr != nil {
+		os.Remove(tmp.Name())
+		return "", fmt.Errorf("close temp file: %w", closeErr)
 	}
 
 	return tmp.Name(), nil
@@ -102,8 +104,6 @@ func detectExt(rawURL, contentType string) string {
 		return ".txt"
 	case strings.Contains(contentType, "text/markdown"):
 		return ".md"
-	case strings.Contains(contentType, "application/epub"):
-		return ".epub"
 	default:
 		return ""
 	}

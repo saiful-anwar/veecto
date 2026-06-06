@@ -105,7 +105,9 @@ var errTestFail = &testError{}
 
 type testError struct{}
 
-func (e *testError) Error() string { return "test error" }
+func (e *testError) Error() string   { return "test error" }
+func (e *testError) Timeout() bool   { return true }
+func (e *testError) Temporary() bool { return true }
 
 func TestRetryEmbedderSuccess(t *testing.T) {
 	inner := &mockEmbedderErr{failAttempts: 2}

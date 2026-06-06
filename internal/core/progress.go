@@ -3,13 +3,18 @@ package core
 import (
 	"fmt"
 	"os"
+	"sync"
 	"time"
 )
+
+var progressMu sync.Mutex
 
 // DefaultProgressFn returns a ProgressFunc that prints to stderr:
 // "! <input>: <err>" on error, "+ <input> (<type>): <n> chunks in <dur>" on success.
 func DefaultProgressFn() ProgressFunc {
 	return func(p Progress) {
+		progressMu.Lock()
+		defer progressMu.Unlock()
 		if p.Error != nil {
 			fmt.Fprintf(os.Stderr, "! %s: %v\n", p.Input, p.Error)
 			return

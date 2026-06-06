@@ -9,8 +9,19 @@ import (
 )
 
 // New creates a core.Writer backed by a file at path. When pretty is true
-// the output is indented JSON; otherwise it is JSONL (one Document per line).
+// the output is indented JSONL (one Document per line); otherwise plain JSONL.
+// Deprecated: use NewFormat with an explicit format constant.
 func New(path string, pretty bool) (core.Writer, error) {
+	format := FormatJSONL
+	if pretty {
+		format = FormatPretty
+	}
+	return NewFormat(path, format)
+}
+
+// NewFormat creates a core.Writer backed by a file at path using the given
+// format (FormatJSONL, FormatPretty, or FormatJSONArray).
+func NewFormat(path string, format string) (core.Writer, error) {
 	if path == "" {
 		return nil, fmt.Errorf("output path required")
 	}
@@ -23,8 +34,12 @@ func New(path string, pretty bool) (core.Writer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create output: %w", err)
 	}
-	if pretty {
+	switch format {
+	case FormatJSONArray:
+		return &arrayWriter{file: f, first: true}, nil
+	case FormatPretty:
 		return &prettyWriter{file: f}, nil
+	default:
+		return &jsonlWriter{file: f}, nil
 	}
-	return &jsonlWriter{file: f}, nil
 }
