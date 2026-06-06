@@ -69,6 +69,7 @@ type Config struct {
 
 // LoadConfig reads, parses, resolves env vars, applies defaults, and validates a YAML config file.
 func LoadConfig(path string) (Config, error) {
+	// #nosec G304 -- path is a user-provided config file path from CLI flags.
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return Config{}, fmt.Errorf("read config: %w", err)

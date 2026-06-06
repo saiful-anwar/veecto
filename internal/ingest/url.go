@@ -31,7 +31,7 @@ func ResolveInput(ctx context.Context, raw string) (localPath string, cleanup fu
 		if err != nil {
 			return "", nil, err
 		}
-		return path, func() { os.Remove(path) }, nil
+		return path, func() { _ = os.Remove(path) }, nil
 	}
 
 	info, err := os.Stat(raw)
@@ -75,11 +75,11 @@ func fetchURL(ctx context.Context, rawURL string) (string, error) {
 	_, err = io.Copy(tmp, src)
 	closeErr := tmp.Close()
 	if err != nil {
-		os.Remove(tmp.Name())
+		_ = os.Remove(tmp.Name())
 		return "", fmt.Errorf("save download: %w", err)
 	}
 	if closeErr != nil {
-		os.Remove(tmp.Name())
+		_ = os.Remove(tmp.Name())
 		return "", fmt.Errorf("close temp file: %w", closeErr)
 	}
 

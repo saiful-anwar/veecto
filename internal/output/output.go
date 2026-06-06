@@ -26,10 +26,11 @@ func NewFormat(path string, format string) (core.Writer, error) {
 		return nil, fmt.Errorf("output path required")
 	}
 	if dir := filepath.Dir(path); dir != "." {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0750); err != nil {
 			return nil, fmt.Errorf("create output dir: %w", err)
 		}
 	}
+	// #nosec G304 -- path is a user-provided output path from CLI flags/config.
 	f, err := os.Create(path)
 	if err != nil {
 		return nil, fmt.Errorf("create output: %w", err)

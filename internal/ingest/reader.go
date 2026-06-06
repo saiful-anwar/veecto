@@ -44,6 +44,7 @@ func ReadFile(path string) (Result, error) {
 
 	switch ext {
 	case ".txt":
+		// #nosec G304 -- path is a user-provided input file from CLI arguments.
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return Result{}, fmt.Errorf("read: %w", err)
@@ -51,6 +52,7 @@ func ReadFile(path string) (Result, error) {
 		return Result{Text: string(data), FileType: "text", Size: info.Size(), Hash: hash(data)}, nil
 
 	case ".md":
+		// #nosec G304 -- path is a user-provided input file from CLI arguments.
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return Result{}, fmt.Errorf("read: %w", err)
